@@ -15,10 +15,13 @@
          make-operator
          ; differentiable operators
          +o
+         -o
          *o
          expto
          expo
-         /o)
+         /o
+         ; like for/sum
+         for/sumo)
 
 ;;; dependencies ;;;
 
@@ -56,6 +59,13 @@
 ; addition
 (define +o
   (make-operator (lambda nums (values (apply + nums) (map (λ (x) 1) nums)))))
+
+; Operator
+; subtraction
+(define (-o z . ws)
+  (if (null? ws)
+      (*o -1 z)
+      (+o z (*o -1 (apply +o ws)))))
 
 ; Operator
 ; multiplication
@@ -98,6 +108,14 @@
   (if (null? ws)
       (reciprocalo z)
       (*o z (reciprocalo (apply *o ws)))))
+
+
+; TODO use the derived fold thing
+(define-syntax-rule
+  (for/sumo (clause ...) body ...)
+  (for/fold ([sum (->dnumber 0)])
+            (clause ...)
+    (+ sum (let () body ...))))
 
 ;;; tests ;;;
 
