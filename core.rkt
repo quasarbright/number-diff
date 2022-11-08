@@ -9,7 +9,13 @@
   (require rackunit)
   (require (submod ".." examples)))
 
-(provide)
+(provide #;()
+         (struct-out dnumber)
+         (struct-out dchild)
+         #;(DNumber DNumber -> DNumber)
+         #;(derivative y x)
+         ; computes the derivative of y with respect to x
+         derivative)
 
 ;;; dependencies ;;;
 
