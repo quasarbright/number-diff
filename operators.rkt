@@ -25,7 +25,7 @@
 
 ;;; dependencies ;;;
 
-(require "core.rkt")
+(require racket/generator "core.rkt")
 
 ;;; data definitions ;;;
 
@@ -75,11 +75,32 @@
 #;(number? ... -> (listof number?))
 ; gradient of multiplication
 (define (dtimes nums)
-  (define prod (apply * nums))
-  (map (λ (x) (/ prod x)) nums))
+  (for/list ([(lefts _ rights) (in-zippers nums)])
+    (* (apply * lefts) (apply * rights))))
 
 (module+ test
-  (check-equal? (dtimes '(2 3 4 5)) '(60 40 30 24)))
+  (check-equal? (dtimes '(2 3 4 5)) '(60 40 30 24))
+  (check-equal? (dtimes '(2 3 0 5)) '(0 0 30 0))
+  (check-equal? (dtimes '(2 0 0 5)) '(0 0 0 0)))
+
+#;(list? -> sequence?)
+; generates a sequence of zipper states for each position in the list.
+; each element has three values: the previous elements in reverse, the current element, and the next elements
+; see tests for an example.
+; kind of like comonad duplicate.
+(define (in-zippers lst)
+  (in-generator #:arity 3
+                (let loop ([prevs '()] [lst lst])
+                  (when (cons? lst)
+                    (yield prevs (car lst) (cdr lst))
+                    (loop (cons (car lst) prevs) (cdr lst))))))
+
+(module+ test
+  (check-equal? (for/list ([(prevs x nexts) (in-zippers '(1 2 3))])
+                  (list prevs x nexts))
+                '((() 1 (2 3))
+                  ((1) 2 (3))
+                  ((2 1) 3 ()))))
 
 ; Operator
 ; exponentiation
@@ -115,7 +136,7 @@
   (for/sumo (clause ...) body ...)
   (for/fold ([sum (->dnumber 0)])
             (clause ...)
-    (+ sum (let () body ...))))
+    (+o sum (let () body ...))))
 
 ;;; tests ;;;
 
