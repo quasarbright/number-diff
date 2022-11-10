@@ -31,7 +31,7 @@
 (define sigmoid
   (make-operator
    (lambda (x) (let ([result (/ (add1 (exp (- x))))])
-                 (values (list (result (* result (- 1 result)))))))))
+                 (values result (list (* result (- 1 result))))))))
 
 #;((listof DNumber) (listof DNumber) -> DNumber)
 ; mean squared error
@@ -54,8 +54,8 @@
 (define (train-perceptron prc
                           data
                           #:loss-fn [loss-fn mse-loss]
-                          #:learning-rate [lr 0.01]
-                          #:epochs [epochs 10])
+                          #:learning-rate [lr 0.1]
+                          #:epochs [epochs 100])
   (match-define (list (list inputs outputs) ...) data)
   (for/fold ([prc prc])
             ([epoch (in-range epochs)])
@@ -72,6 +72,7 @@
 (define (train-perceptron/epoch prc inputs outputs loss-fn lr)
   (define guesses (run-perceptron* prc inputs))
   (define loss (loss-fn guesses outputs))
+  (displayln (dnumber-value loss))
   (backprop prc loss lr))
 
 #;(perceptron? (listof (listof number?)) -> (listof DNumber))
@@ -108,12 +109,23 @@
   (define guesses (run-perceptron* prc inputs))
   (for/list ([guess guesses])
     (let ([guess (dnumber-value guess)])
-      (if (< guess 1/2)
-          0
-          1))))
+      (list (if (< guess 1/2)
+                0
+                1)
+            guess))))
 
 ; tests ;
 
 ; TODO test meta gradient descent to learn lr lol
 
-(module+ test)
+(module+ test
+  (test-case "y = x"
+    (define data
+      (for*/list ([x (in-range 1 10)]
+                  [y (in-range 1 10)])
+        (list (list x y) (if (> y x) 1 0))))
+    (define prc (train-perceptron (make-perceptron 2) data))
+    (define outputs (test-perceptron prc (map car data)))
+    (define actuals (map second data))
+    (for ([elem  (map list actuals outputs)])
+      (displayln elem))))
