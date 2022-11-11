@@ -1,6 +1,6 @@
 #lang racket
 
-; perceptron classifier using auto diff
+; perceptron using auto diff
 
 ; module interface ;
 
@@ -21,7 +21,7 @@
 ; A Perceptron is a
 #;(perceptron (Matrix DNumber natural? natural?)
               Operator)
-; Represents a single-layer perceptron binary classifier
+; Represents a linear perceptron estimator.
 ; with a non-linear activation function like sigmoid or tanh
 
 ; functionality ;
@@ -49,12 +49,12 @@
   (perceptron (build-list (add1 num-inputs) (thunk* (->dnumber 0)))
               activation))
 
-#;(perceptron? (listof (list/c (listof number?) (or/c 0 1))) -> perceptron?)
+#;(perceptron? (listof (list/c (listof number?) number?)) -> perceptron?)
 ; basic batch gradient optimization
 (define (train-perceptron prc
                           data
                           #:loss-fn [loss-fn mse-loss]
-                          #:learning-rate [lr 0.1]
+                          #:learning-rate [lr 0.01]
                           #:epochs [epochs 100])
   (match-define (list (list inputs outputs) ...) data)
   (for/fold ([prc prc])
@@ -63,7 +63,7 @@
 
 #;(perceptron?
    (listof (listof number?))
-   (listof (or/c 0 1))
+   (listof number?)
    ((listof DNumber) (listof DNumber) -> DNumber)
    number?
    ->
@@ -72,7 +72,6 @@
 (define (train-perceptron/epoch prc inputs outputs loss-fn lr)
   (define guesses (run-perceptron* prc inputs))
   (define loss (loss-fn guesses outputs))
-  (displayln (dnumber-value loss))
   (backprop prc loss lr))
 
 #;(perceptron? (listof (listof number?)) -> (listof DNumber))
@@ -103,29 +102,44 @@
                        (->dnumber (- (dnumber-value weight) (* dw lr))))))
   (struct-copy perceptron prc [weights weights^]))
 
-#;(perceptron? (list/c (listof number?) (or/c 0 1)) (listof (or/c 0 1)))
-; use prc to classify inputs (rounds to 0 or 1)
+#;(perceptron? (list/c (listof number?) number?) (listof number?))
+; use prc to estimate inputs
 (define (test-perceptron prc inputs)
   (define guesses (run-perceptron* prc inputs))
   (for/list ([guess guesses])
-    (let ([guess (dnumber-value guess)])
-      (list (if (< guess 1/2)
-                0
-                1)
-            guess))))
+    (dnumber-value guess)))
+
+#;((listof any/c) (listof any/c) -> number?)
+; computes the portion of the guesses that are correct
+(define (accuracy-score guesses actuals)
+  (define num-correct
+    (for/sum ([guess guesses]
+              [actual actuals])
+      (if (equal? guess actual) 1 0)))
+  (/ num-correct (length guesses)))
 
 ; tests ;
 
 ; TODO test meta gradient descent to learn lr lol
 
 (module+ test
-  (test-case "y = x"
+  (test-case "y = x classification"
     (define data
       (for*/list ([x (in-range 1 10)]
                   [y (in-range 1 10)])
         (list (list x y) (if (> y x) 1 0))))
     (define prc (train-perceptron (make-perceptron 2) data))
     (define outputs (test-perceptron prc (map car data)))
+    (define output-classes (map (λ (n) (if (>= n 1/2) 1 0)) outputs))
     (define actuals (map second data))
-    (for ([elem  (map list actuals outputs)])
-      (displayln elem))))
+    (define accuracy (accuracy-score output-classes actuals))
+    (check-within accuracy 1 0.1))
+  (test-case "y = x regression"
+    (define data
+      (for/list ([x (in-range 1 100)])
+        (list (list x) x)))
+    (define prc (train-perceptron (make-perceptron 1 identity) data #:learning-rate 0.0001))
+    (define outputs (test-perceptron prc (map car data)))
+    (define actuals (map second data))
+    (define mse (dnumber-value (mse-loss outputs actuals)))
+    (check-within mse 0 0.1)))
