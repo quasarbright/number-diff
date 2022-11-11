@@ -121,6 +121,12 @@
 ; tests ;
 
 ; TODO test meta gradient descent to learn lr lol
+; I tried, it's hard. You'll need to rewrite training around it to support it.
+; It's tricky since you throw the weights away. And what loss will you propagate to update the lr?
+; It'll have to be some meta-loss on the losses themselves. And you'll have to keep that gradient around.
+; Maybe you could use delta loss between epochs as meta-loss and learn lr on the fly, instead of between entire
+; trainings. Might make the bookkeeping easier.
+; look into this: https://arxiv.org/abs/1502.03492
 
 (module+ test
   (test-case "y = x classification"
