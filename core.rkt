@@ -90,16 +90,24 @@
 ; Convert a DNumber to a number
 (define (dnumber->number n) (dnumber-value n))
 
-#;(DNumber DNumber -> number?)
+#;(DNumber DNumber [#:order natural?] -> number?)
 ; computes the derivative of y with respect to x
-(define (derivative y x)
-  (if (eq? y x)
-      (number->dnumber 1)
-      (match-let ([(dnumber _ (app force (list (dchild u* dy/du*) ...))) y])
-        (for/sumo ([dy/du dy/du*]
-                   [u u*])
-          ; chain rule
-          (*o dy/du (derivative u x))))))
+; optionally supply order of the derivative. e.g. 1 for first derivative, 2 for second derivative
+(define (derivative y x #:order [n 1])
+  ; single derivative
+  (define (d/dx y)
+    (if (eq? y x)
+        (number->dnumber 1)
+        (match-let ([(dnumber _ (app force (list (dchild u* dy/du*) ...))) y])
+          (for/sumo ([dy/du dy/du*]
+                     [u u*])
+            ; chain rule
+            (*o dy/du (derivative u x))))))
+  ; apply d/dx n times
+  (let loop ([n n] [y y])
+    (if (zero? n)
+        y
+        (loop (sub1 n) (d/dx y)))))
 
 ; core operators
 
@@ -163,4 +171,18 @@
   ; For recursive numbers: L(a) = 1 + a * L(a), dL/da = a^2 (L = 1 / (1 - a))
   (check-equal? (dnumber->number (derivative (*o plain2 plain3) plain2)) 3)
   (check-equal? (dnumber->number (derivative (*o plain2 plain3) plain3)) 2)
-  (check-equal? (dnumber->number (derivative (derivative (*o plain3 plain3) plain3) plain3)) 2))
+  ; second derivative of x*x = 2
+  (check-equal? (dnumber->number (derivative (derivative (*o plain3 plain3) plain3) plain3)) 2)
+  (check-equal? (dnumber->number (derivative (*o plain3 plain3) plain3 #:order 2)) 2)
+  ; third derivative of x*x = 0
+  (check-equal? (dnumber->number (derivative (*o plain3 plain3) plain3 #:order 3)) 0)
+  ; derivatives of x*x*x
+  (check-equal? (dnumber->number (derivative (*o plain4 plain4 plain4) plain4)) 48)
+  (check-equal? (dnumber->number (derivative (*o plain4 plain4 plain4) plain4 #:order 2)) 24)
+  (check-equal? (dnumber->number (derivative (*o plain4 plain4 plain4) plain4 #:order 3)) 6)
+  (check-equal? (dnumber->number (derivative (*o plain4 plain4 plain4) plain4 #:order 4)) 0)
+  (let ()
+    (define (f x)
+      (+o (*o 3 x x) (*o 5 x) 1))
+    (check-equal? (dnumber->number (derivative (f plain4) plain4)) 29)
+    (check-equal? (dnumber->number (derivative (f plain4) plain4 #:order 2)) 6)))
