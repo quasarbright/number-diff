@@ -51,12 +51,13 @@
   ; d(* x y) / dx = y WLOG
   (define factor2 (dchild plain2 plain3))
   (define factor3 (dchild plain3 plain2))
-  (define prod23 (dnumber 6 (delay (list factor2 factor3))))
+  (define prod23 (dnumber 6 (delay (list factor2
+                                         factor3))))
   ; 4 + 5 = 9
   ; d(+ x y) / dx = 1 WLOG
   (define term4 (dchild plain4 (number->dnumber 1)))
   (define term5 (dchild plain5 (number->dnumber 1)))
-  (define sum45 (dnumber 9 (list term4 term5)))
+  (define sum45 (dnumber 9 (delay (list term4 term5))))
   ; (2 * 3) * (4 + 5)
   (define prod69 (dnumber 100 (delay (list (dchild prod23 sum45) (dchild sum45 prod23)))))
   ; (2 * 3 + 1) ^ 2
@@ -108,7 +109,7 @@
 (define (+o . nums)
   (let ([nums (map ensure-dnumber nums)])
     (dnumber (apply + (map dnumber->number nums))
-             (delay (for/list ([num nums]) (number->dnumber 1))))))
+             (delay (for/list ([num nums]) (dchild num (number->dnumber 1)))))))
 
 ; TODO proper derived fold
 (define-syntax-rule
@@ -139,7 +140,7 @@
 (define (*o/bin a b)
   (dnumber (* (dnumber->number a)
               (dnumber->number b))
-           (delay (list b a))))
+           (delay (list (dchild a b) (dchild b a)))))
 
 ;;; tests ;;;
 
@@ -160,4 +161,6 @@
   ; x^x (derivative is x^x * (ln(x) + 1))
   (check-equal? (dnumber->number (derivative self-exp3 plain3)) (+ 27 (* 27 (log 3))))
   ; For recursive numbers: L(a) = 1 + a * L(a), dL/da = a^2 (L = 1 / (1 - a))
-  )
+  (check-equal? (dnumber->number (derivative (*o plain2 plain3) plain2)) 3)
+  (check-equal? (dnumber->number (derivative (*o plain2 plain3) plain3)) 2)
+  (check-equal? (dnumber->number (derivative (derivative (*o plain3 plain3) plain3) plain3)) 2))
