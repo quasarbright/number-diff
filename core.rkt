@@ -25,85 +25,139 @@
 
 (struct dchild [input derivative] #:transparent)
 ; A DChild is a
-#;(dchild DNumber number?)
-; TODO make derivative a DNumber to support higher order derivatives
+#;(dchild DNumber DNumber)
 ; Represents an input to a differentiable computation and its derivative
 ; where
 ; input is the input
-; derivative is the numerical value of its first derivative (plain number)
+; derivative is its first derivative of this child's parent with respect to this input
 
 (struct dnumber [value children] #:transparent)
 ; A DNumber is a
-#;(dnumber number? (listof DChild))
+#;(dnumber number? (promise/c (listof DChild)))
 ; Represents the result of a differentiable computation
 ; where
 ; value is the numerical result (plain number)
-; children are the inputs and their derivatives
+; children are the inputs and their derivatives.
+; The list of children is lazy because derivatives of functions like exp lead to infinite
+; trees of derivative children.
+; CONSTRAINT: The graph formed from a DNumber and its child values (ignoring derivatives) must be a DAG.
+; In other words, a DNumber must not contain itself (by eq?) as an input.
 (module+ examples
   ; 2 * 3 = 6
-  (define plain2 (dnumber 2 '()))
-  (define plain3 (dnumber 3 '()))
-  (define plain4 (dnumber 4 '()))
-  (define plain5 (dnumber 5 '()))
+  (define plain2 (number->dnumber 2))
+  (define plain3 (number->dnumber 3))
+  (define plain4 (number->dnumber 4))
+  (define plain5 (number->dnumber 5))
   ; d(* x y) / dx = y WLOG
-  (define factor2 (dchild plain2 3))
-  (define factor3 (dchild plain3 2))
-  (define prod23 (dnumber 6 (list factor2 factor3)))
+  (define factor2 (dchild plain2 plain3))
+  (define factor3 (dchild plain3 plain2))
+  (define prod23 (dnumber 6 (delay (list factor2 factor3))))
   ; 4 + 5 = 9
   ; d(+ x y) / dx = 1 WLOG
-  (define term4 (dchild plain4 1))
-  (define term5 (dchild plain5 1))
+  (define term4 (dchild plain4 (number->dnumber 1)))
+  (define term5 (dchild plain5 (number->dnumber 1)))
   (define sum45 (dnumber 9 (list term4 term5)))
   ; (2 * 3) * (4 + 5)
-  (define prod69 (dnumber 100 (list (dchild prod23 9) (dchild sum45 6))))
+  (define prod69 (dnumber 100 (delay (list (dchild prod23 sum45) (dchild sum45 prod23)))))
   ; (2 * 3 + 1) ^ 2
-  ; the second 2 isn't eq? to the first 2, so don't worry about that
-  (define square-sum (dnumber 49 (list (dchild (dnumber 7 (list (dchild prod23 1)
-                                                                (dchild (dnumber 1 '()) 1)))
-                                               ; d x^2 / dx = 2*x
-                                               14)
-                                       (dchild (dnumber 2 '())
-                                               ; d 6^x / dx = 6^x * ln(x)
-                                               (* 36 (log 6))))))
-  ; 3^2
-  (define square3 (dnumber 9 (list (dchild plain3 (* 2 3))
-                                   (dchild plain2 (* 9 (log 3))))))
+  ; where square is repeated multiplication for now. Otherwise we'd have to do ln and its derivative.
+  (define square-sum
+    (let ([factor (dnumber 7 (delay (list (dchild prod23 (number->dnumber 1))
+                                          (dchild (number->dnumber 1) (number->dnumber 1)))))])
+      (dnumber 49 (delay (list (dchild factor factor) (dchild factor factor))))))
+  ; 3^2 as repeated multiplication
+  (define square3 (dnumber 9 (delay (list (dchild plain3 plain3)
+                                          (dchild plain3 plain3)))))
   ; 3^3 like x^x
   ; they're the same 3
-  (define self-exp3 (dnumber 27 (list (dchild plain3 27)
-                                      (dchild plain3 (* 27 (log 3))))))
-  )
+  ; I cheat and use constant derivatives to avoid ln's derivative. This'll only work for first order.
+  (define self-exp3 (dnumber 27 (delay (list (dchild plain3 (number->dnumber 27))
+                                             (dchild plain3 (number->dnumber (* 27 (log 3)))))))))
 
 ;;; functionality ;;;
+
+#;(number? -> DNumber)
+; convert a plain number to a DNumber.
+; The result has no inputs.
+(define (number->dnumber n) (dnumber n (delay '())))
+
+#;((or/c number? DNumber) -> DNumber)
+; Convert a number to a DNumber if it isn't one already
+(define (ensure-dnumber n) (if (dnumber? n) n (number->dnumber n)))
+
+#;(DNumber -> number?)
+; Convert a DNumber to a number
+(define (dnumber->number n) (dnumber-value n))
 
 #;(DNumber DNumber -> number?)
 ; computes the derivative of y with respect to x
 (define (derivative y x)
   (if (eq? y x)
-      1
-      (match-let ([(dnumber _ (list (dchild u* dy/du*) ...)) y])
-        (for/sum ([dy/du dy/du*]
-                  [u u*])
+      (number->dnumber 1)
+      (match-let ([(dnumber _ (app force (list (dchild u* dy/du*) ...))) y])
+        (for/sumo ([dy/du dy/du*]
+                   [u u*])
           ; chain rule
-          (* dy/du (derivative u x))))))
+          (*o dy/du (derivative u x))))))
+
+; core operators
+
+#;((or/c DNumber number?) ... -> DNumber)
+; Differentiable +
+; Plain numbers get lifted.
+(define (+o . nums)
+  (let ([nums (map ensure-dnumber nums)])
+    (dnumber (apply + (map dnumber->number nums))
+             (delay (for/list ([num nums]) (number->dnumber 1))))))
+
+; TODO proper derived fold
+(define-syntax-rule
+  (for/sumo (clause ...) body ...)
+  (for/fold ([sum (number->dnumber 0)])
+            (clause ...)
+    (let ([term (let () body ...)])
+      (+o sum term))))
+
+#;((or/c DNumber number?) ... -> DNumber)
+; Differentiable *
+; Plain numbers get lifted.
+(define (*o . nums)
+  (for/producto ([num nums])
+    (ensure-dnumber num)))
+
+; TODO proper derived fold
+(define-syntax-rule
+  (for/producto (clause ...) body ...)
+  (for/fold ([product (number->dnumber 1)])
+            (clause ...)
+    (let ([factor (let () body ...)])
+      (*o/bin product factor))))
+
+#;(DNumber DNumber -> DNumber)
+; Differentiable binary multiplication
+; Does not lift plain numbers.
+(define (*o/bin a b)
+  (dnumber (* (dnumber->number a)
+              (dnumber->number b))
+           (delay (list b a))))
 
 ;;; tests ;;;
 
 (module+ test
   ; self
-  (check-equal? (derivative plain2 plain2) 1)
+  (check-equal? (dnumber->number (derivative plain2 plain2)) 1)
   ; constant
-  (check-equal? (derivative plain2 plain3) 0)
+  (check-equal? (dnumber->number (derivative plain2 plain3)) 0)
   ; binary addition
-  (check-equal? (derivative sum45 plain4) 1)
+  (check-equal? (dnumber->number (derivative sum45 plain4)) 1)
   ; binary multiplication
-  (check-equal? (derivative prod23 plain2) 3)
+  (check-equal? (dnumber->number (derivative prod23 plain2)) 3)
   ; square
-  (check-equal? (derivative square3 plain3) 6)
+  (check-equal? (dnumber->number (derivative square3 plain3)) 6)
   ; square-sum
-  (check-equal? (derivative square-sum plain2) (* (* 2 7) 3))
+  (check-equal? (dnumber->number (derivative square-sum plain2)) (* (* 2 7) 3))
   ; e^x
   ; x^x (derivative is x^x * (ln(x) + 1))
-  (check-equal? (derivative self-exp3 plain3) (+ 27 (* 27 (log 3))))
+  (check-equal? (dnumber->number (derivative self-exp3 plain3)) (+ 27 (* 27 (log 3))))
   ; For recursive numbers: L(a) = 1 + a * L(a), dL/da = a^2 (L = 1 / (1 - a))
   )
