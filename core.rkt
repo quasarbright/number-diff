@@ -9,27 +9,26 @@
   (require rackunit)
   (require (submod ".." examples)))
 
-(provide #;()
+(provide ; data types
          (struct-out dnumber)
          (struct-out dchild)
-         #;(DNumber DNumber -> DNumber)
-         #;(derivative y x)
-         ; computes the derivative of y with respect to x
-         derivative)
+         (contract-out
+          [number->dnumber (-> number? dnumber?)]
+          [ensure-dnumber (-> (or/c number? dnumber?) dnumber?)]
+          [dnumber->number (-> dnumber? number?)]
+          #;(derivative y x #:order n)
+          ; computes the nth derivative of y with respect to x
+          [derivative (->* (dnumber? dnumber?) (#:order natural?) dnumber?)]
+          [+o (->* () #:rest (listof (or/c dnumber? number?)) dnumber?)]
+          [*o (->* () #:rest (listof (or/c dnumber? number?)) dnumber?)])
+         for/sumo
+         for/producto)
 
 ;;; dependencies ;;;
 
 (require)
 
 ;;; data definitions ;;;
-
-(struct dchild [input derivative] #:transparent)
-; A DChild is a
-#;(dchild DNumber DNumber)
-; Represents an input to a differentiable computation and its derivative
-; where
-; input is the input
-; derivative is its first derivative of this child's parent with respect to this input
 
 (struct dnumber [value children] #:transparent)
 ; A DNumber is a
@@ -42,6 +41,17 @@
 ; trees of derivative children.
 ; CONSTRAINT: The graph formed from a DNumber and its child values (ignoring derivatives) must be a DAG.
 ; In other words, a DNumber must not contain itself (by eq?) as an input.
+
+(struct dchild [input derivative] #:transparent)
+; A DChild is a
+#;(dchild DNumber DNumber)
+; Represents an input to a differentiable computation and its derivative
+; where
+; input is the input
+; derivative is its first derivative of this child's parent with respect to this input
+
+; TODO figure out how to do make a proper contract for this thing
+; It's a mutually recursive chaperone contract. chaperone bc of promise/c
 (module+ examples
   ; 2 * 3 = 6
   (define plain2 (number->dnumber 2))
