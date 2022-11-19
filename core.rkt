@@ -119,6 +119,11 @@
         y
         (loop (sub1 n) (d/dx y)))))
 
+; TODO you get exponential blowup from extra + 0 in for/sumo while computing higher order derivatives
+; Ideas:
+; * instead of blindly converting numbers to dnumbers, leave them out of the derivative
+; * instead of a for/sumo, do apply +o and make a special case for (+ n). dirty.
+
 ; core operators
 
 #;((or/c DNumber number?) ... -> DNumber)
