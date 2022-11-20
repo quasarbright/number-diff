@@ -98,7 +98,7 @@
 
 ;;; tests ;;;
 
-#;(module+ test
+(module+ test
   (require (submod "core.rkt" examples))
   (check-equal? (dnumber->number (derivative (+o plain2 3) plain2)) 1)
   (check-equal? (dnumber->number (derivative (+o plain3 plain3) plain3)) 2)
@@ -113,5 +113,16 @@
   (check-equal? (dnumber->number (derivative (expo plain3) plain3 #:order 4)) (exp 3))
   (check-equal? (dnumber->number (derivative (reciprocalo plain3) plain3)) (- (/ 9)))
   (check-equal? (dnumber->number (derivative (/o plain3) plain3)) (- (/ 9)))
+  (check-equal? (dnumber->number (derivative (/o plain3) plain3 #:order 2)) 2/27)
   (check-equal? (dnumber->number (derivative (/o 6 plain3) plain3)) (- (/ 2 3)))
-  (check-equal? (dnumber->number (/o 6 plain3)) 2))
+  (check-equal? (dnumber->number (/o 6 plain3)) 2)
+  (check-equal? (dnumber->number (derivative (expto plain3 4) plain3 #:order 4)) 24)
+  (check-equal? (dnumber->number (derivative (logo plain3) plain3)) 1/3)
+  (check-equal? (dnumber->number (derivative (logo plain3) plain3 #:order 2)) -1/9)
+  (check-equal? (dnumber->number (derivative (logo plain3 plain2) plain3)) (/ 1/3 (log 2)))
+  (check-equal? (dnumber->number (derivative (logo plain3 plain2) plain3 #:order 2)) (/ -1/9 (log 2)))
+  (check-equal? (dnumber->number (derivative (logo plain3 plain2) plain2)) (- (/ (log 3) (* 2 (log 2) (log 2)))))
+  (check-within (dnumber->number (derivative (logo plain3 plain2) plain2 #:order 2))
+                (/ (* (log 3) (+ (log 2) 2))
+                   (* 4 (log 2) (log 2) (log 2)))
+                1e-10))
