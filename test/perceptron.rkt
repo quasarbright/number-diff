@@ -28,10 +28,11 @@
 
 ; Operator
 ; sigmoid activation function
-(define sigmoid
-  (make-operator
-   (lambda (x) (let ([result (/ (add1 (exp (- x))))])
-                 (values result (list (* result (- 1 result))))))))
+(define (sigmoid z)
+  (define result
+    (dnumber (/ (add1 (exp (- (dnumber->number z)))))
+             (delay (list (dchild z (*o result (-o 1 result)))))))
+  result)
 
 #;((listof DNumber) (listof DNumber) -> DNumber)
 ; mean squared error
@@ -46,7 +47,7 @@
 ; and uses the given (optional) activation function.
 ; Initializes weights to zero
 (define (make-perceptron num-inputs [activation sigmoid])
-  (perceptron (build-list (add1 num-inputs) (thunk* (->dnumber 0)))
+  (perceptron (build-list (add1 num-inputs) (thunk* (number->dnumber 0)))
               activation))
 
 #;(perceptron? (listof (list/c (listof number?) number?)) -> perceptron?)
@@ -97,9 +98,23 @@
   (define weights (perceptron-weights prc))
   (define weights^ (for/list ([weight weights])
                      (let ([dw (derivative loss weight)])
-                       ; throw away old weights
                        ; subtract dw to minimize loss
-                       (->dnumber (- (dnumber-value weight) (* dw lr))))))
+                       ; Keep old lr so we can diff wrt it for meta-optimization.
+                       ; throw away dw's tree bc it gets exponentially huge
+                       ; and makes the derivatives super slow to calculate.
+                       ; Unfortunately, weight is an input to dw, so we need it for
+                       ; meta-optimizing initial weights.
+                       ; So we throw weight's tree away too since we can't validly
+                       ; and practically meta-optimize initial weights anyway.
+                       ; We see exponential blowup because dw depends on the guess, which depends
+                       ; on all weights, which would all depend on all previous weights,
+                       ; which would all depend on all previous previous weights, etc.
+                       ; TODO try leaving it in after fixing 0+ and 1* blowup. But
+                       ; even without that, we would still see exponential blowup.
+                       ; Sharing should alleviate the memory cost, but you still have to traverse
+                       ; an exponentially growing tree when differentiating.
+                       (-o (dnumber->number weight)
+                           (*o (dnumber->number dw) lr)))))
   (struct-copy perceptron prc [weights weights^]))
 
 #;(perceptron? (list/c (listof number?) number?) (listof number?))
@@ -107,7 +122,7 @@
 (define (test-perceptron prc inputs)
   (define guesses (run-perceptron* prc inputs))
   (for/list ([guess guesses])
-    (dnumber-value guess)))
+    (dnumber->number guess)))
 
 #;((listof any/c) (listof any/c) -> number?)
 ; computes the portion of the guesses that are correct
@@ -147,5 +162,5 @@
     (define prc (train-perceptron (make-perceptron 1 identity) data #:learning-rate 0.0001))
     (define outputs (test-perceptron prc (map car data)))
     (define actuals (map second data))
-    (define mse (dnumber-value (mse-loss outputs actuals)))
+    (define mse (dnumber->number (mse-loss outputs actuals)))
     (check-within mse 0 0.1)))
