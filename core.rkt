@@ -52,6 +52,8 @@
 
 ; TODO figure out how to do make a proper contract for this thing
 ; It's a mutually recursive chaperone contract. chaperone bc of promise/c
+; https://docs.racket-lang.org/guide/contracts-gotchas.html#%28part._.Defining_.Recursive_.Contracts%29
+; But chaperone will ruin eq?
 (module+ examples
   ; 2 * 3 = 6
   (define plain2 (number->dnumber 2))
