@@ -125,6 +125,11 @@
 ; Ideas:
 ; * instead of blindly converting numbers to dnumbers, leave them out of the derivative
 ; * instead of a for/sumo, do apply +o and make a special case for (+ n). dirty.
+; I tried making it so operators don't produce dchildren for plain numbers and added a few special cases
+; to +o and *o. Even then, it still doesn't get d/dx e^x to be just e^x because you get a *o 1.
+; If you really want to avoid that, you'll have to dirty up the derivative code a little, which I don't want to
+; do. It's so nice!!
+; It dirties up +o and *o a lot too.
 
 ; core operators
 
