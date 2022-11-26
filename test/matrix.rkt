@@ -17,16 +17,16 @@
          (contract-out
           ; variadic matrix multiplication
           ; shapes must line up
-          [m* (->* () #:rest (cons/c matrix? (listof matrix?)) matrix?)]
+          [m* (->* (matrix?) #:rest (listof matrix?) matrix?)]
           ; variadic matrix addition
           ; shapes must be the same
-          [m+ (->* () #:rest (cons/c matrix? (listof matrix?)) matrix?)]
+          [m+ (->* (matrix?) #:rest (listof matrix?) matrix?)]
           ; swaps rows and columns
           [matrix-transpose (-> matrix? matrix?)]
           ; get number of rows and columns
           [matrix-shape (-> matrix? (list/c natural? natural?))]
           ; like map for matrices
-          [matrix-map (->* (procedure?) #:rest (cons/c matrix? (listof matrix?)) matrix?)]))
+          [matrix-map (->* (procedure? matrix?) #:rest (listof matrix?) matrix?)]))
 
 ; Dependencies ;
 
