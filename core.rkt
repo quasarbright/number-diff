@@ -130,6 +130,9 @@
 ; If you really want to avoid that, you'll have to dirty up the derivative code a little, which I don't want to
 ; do. It's so nice!!
 ; It dirties up +o and *o a lot too.
+; TODO explore a pruning abstraction where you give it dnumbers to cut out of the derivatives.
+; Replaces the children promise with one that filters over the force of the original.
+; Or you could add an optional mask argument to derivative and it wouldn't look inside of those numbers.
 
 ; core operators
 
